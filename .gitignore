@@ -32,3 +32,7 @@ desktop.ini
 
 # Logs
 *.log
+
+# Audio recordings (user-generated, not tracked in git)
+data/audio/*.mp3
+data/audio/*.wav

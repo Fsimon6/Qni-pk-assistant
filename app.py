@@ -1,16 +1,22 @@
 # -*- coding: utf-8 -*-
 """歌手PK助手 - 基于 Streamlit 的歌单管理工具"""
 
+import io
 import json
 import os
 import uuid
+import wave
 
 import streamlit as st
+from audio_recorder_streamlit import audio_recorder
+import lameenc
 
 # ===== 配置 =====
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DATA_FILE = os.path.join(DATA_DIR, "songlist.json")
+AUDIO_DIR = os.path.join(DATA_DIR, "audio")  # 录音文件存放目录
+MAX_RECORD_SECONDS = 10  # 录音最长 10 秒
 
 # 每行显示的卡片数（响应式网格）
 COLS_PER_ROW = 4
@@ -38,6 +44,53 @@ def save_data(data: dict) -> None:
 def gen_id() -> str:
     """生成短ID"""
     return uuid.uuid4().hex[:8]
+
+
+# ===== 录音处理 =====
+def save_audio_as_mp3(audio_bytes: bytes, sid: str) -> str:
+    """将录音字节（WAV）保存为 MP3，截断到 MAX_RECORD_SECONDS 秒。
+    返回保存的文件名（不含目录）；失败返回空串。"""
+    if not audio_bytes:
+        return ""
+    os.makedirs(AUDIO_DIR, exist_ok=True)
+    try:
+        # 解析 WAV 字节，截取前 N 秒的 PCM 帧
+        with wave.open(io.BytesIO(audio_bytes), "rb") as wav:
+            sample_rate = wav.getframerate()
+            channels = wav.getnchannels()
+            max_frames = sample_rate * MAX_RECORD_SECONDS
+            frames = wav.readframes(min(wav.getnframes(), max_frames))
+        # 用 lameenc 编码为 MP3（纯 Python，无需 ffmpeg）
+        encoder = lameenc.Encoder()
+        encoder.set_bit_rate(128)
+        encoder.set_in_sample_rate(sample_rate)
+        encoder.set_channels(channels)
+        encoder.set_quality(2)
+        mp3_data = encoder.encode(frames) + encoder.flush()
+        filename = f"{sid}.mp3"
+        with open(os.path.join(AUDIO_DIR, filename), "wb") as f:
+            f.write(mp3_data)
+        return filename
+    except Exception as e:
+        st.error(f"保存录音失败: {e}")
+        return ""
+
+
+def get_audio_path(song: dict):
+    """返回歌曲关联的音频绝对路径，不存在则返回 None。"""
+    audio = song.get("audio")
+    if not audio:
+        return None
+    path = os.path.join(AUDIO_DIR, audio)
+    return path if os.path.exists(path) else None
+
+
+def delete_audio(song: dict) -> None:
+    """删除歌曲关联的音频文件和字段。"""
+    path = get_audio_path(song)
+    if path and os.path.exists(path):
+        os.remove(path)
+    song.pop("audio", None)
 
 
 # ===== 歌单解析 =====
@@ -413,7 +466,7 @@ def singer_page() -> None:
     )
 
     # 表头行（静态文字说明）
-    hdr_s, hdr_n, hdr_l, hdr_b1, hdr_b2, hdr_b3 = st.columns([0.25, 1.4, 2.8, 1.0, 1.0, 1.0])
+    hdr_s, hdr_n, hdr_l, hdr_b1, hdr_b2, hdr_b3, hdr_b4 = st.columns([0.25, 1.4, 2.8, 1.0, 1.0, 1.0, 1.0])
     with hdr_s:
         st.caption("状态")
     with hdr_n:
@@ -426,13 +479,15 @@ def singer_page() -> None:
         st.caption("保存")
     with hdr_b3:
         st.caption("删除")
+    with hdr_b4:
+        st.caption("录音")
 
     # 每首歌一行
     for song in songs:
         is_sung = song.get("sung", False)
         sid = song["id"]
 
-        c1_stat, c2_name, c3_lyrics, c4_btn1, c5_btn2, c6_btn3 = st.columns([0.25, 1.4, 2.8, 1.0, 1.0, 1.0])
+        c1_stat, c2_name, c3_lyrics, c4_btn1, c5_btn2, c6_btn3, c7_audio = st.columns([0.25, 1.4, 2.8, 1.0, 1.0, 1.0, 1.0])
 
         # 状态列：红色🔴或空（字号缩小让高度不撑大）
         with c1_stat:
@@ -497,9 +552,37 @@ def singer_page() -> None:
         # 操作按钮3：删除歌曲
         with c6_btn3:
             if st.button("🗑️删除", key=f"del_{sid}", type="secondary", use_container_width=True):
+                # 删除歌曲时一并删除录音
+                delete_audio(song)
                 singer["songs"] = [s for s in singer["songs"] if s["id"] != sid]
                 save_data(data)
                 st.rerun()
+
+        # 录音列：未录音显示录音按钮，已录音显示播放器+重录按钮
+        with c7_audio:
+            audio_path = get_audio_path(song)
+            if not audio_path:
+                # 未录音：显示麦克风录音按钮（点击开始，再点击结束并返回音频）
+                audio_bytes = audio_recorder(
+                    text="",
+                    icon_size="1.5x",
+                    key=f"rec_{sid}",
+                )
+                if audio_bytes:
+                    filename = save_audio_as_mp3(audio_bytes, sid)
+                    if filename:
+                        song["audio"] = filename
+                        save_data(data)
+                        st.rerun()
+            else:
+                # 已录音：显示播放器 + 小字"重录"按钮
+                with open(audio_path, "rb") as f:
+                    audio_bytes = f.read()
+                st.audio(audio_bytes, format="audio/mp3")
+                if st.button("重录", key=f"rerec_{sid}", use_container_width=True):
+                    delete_audio(song)
+                    save_data(data)
+                    st.rerun()
 
         st.divider()
 
