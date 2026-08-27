@@ -332,19 +332,22 @@
           "id": "b40cb845",
           "name": "泪桥",
           "lyrics": "无心过问",
-          "sung": false
+          "sung": false,
+          "audio": "b40cb845.mp3"
         },
         {
           "id": "b6db6faf",
           "name": "勇气",
           "lyrics": "爱真的需要勇气",
-          "sung": false
+          "sung": false,
+          "audio": "b6db6faf.mp3"
         },
         {
           "id": "816a423d",
           "name": "答案",
           "lyrics": "爱就像蓝天白云",
-          "sung": false
+          "sung": false,
+          "audio": "816a423d.mp3"
         },
         {
           "id": "a3a4a6b1",

@@ -36,3 +36,16 @@ desktop.ini
 # Audio recordings (user-generated, not tracked in git)
 data/audio/*.mp3
 data/audio/*.wav
+
+# Environment / secrets
+.env
+.env.*
+
+# Temporary diagnostic & verification scripts
+_diag_*.py
+_verify_consistency.py
+_cleanup_leftovers.py
+_tmp_*.py
+
+# Stray files
+python
