@@ -1,7 +1,10 @@
-streamlit==1.62.0
+streamlit==1.60.0
 python-docx==1.2.0
-# 音频录音组件（与 streamlit 的 altair 版本冲突，需单独安装：pip install audio-recorder-streamlit==0.0.10 --no-deps）
+# 音频录音组件（声明依赖 altair<5）
+# streamlit<=1.60.0 要求 altair>=4.0，与 altair<5 兼容，pip 自动解析至 4.2.2
+# streamlit>=1.61.0 要求 altair>=5.0.0，与 altair<5 冲突，故 streamlit 上限锁定 1.60.0
 audio-recorder-streamlit==0.0.10
+altair<5
 # MP3 编码（纯 Python，无需 ffmpeg）
 lameenc==1.8.4
 # Supabase 客户端（PostgreSQL + Storage）
